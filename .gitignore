@@ -1,0 +1,9 @@
+build/
+.cache/
+.qtcreator/
+*.o
+*.obj
+*.exe
+*.dll
+CMakeCache.txt
+CMakeFiles/
