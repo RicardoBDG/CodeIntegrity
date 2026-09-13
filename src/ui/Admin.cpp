@@ -15,6 +15,13 @@
 #include <algorithm>
 #include "../model/Logger.hpp"
 
+static QString comboBoxStyle(StyleManager* styleManager)
+{
+    return "QComboBox { " + styleManager->getLineEditStyle() + " min-height: 40px; }"
+           "QComboBox::drop-down { border: none; }"
+           "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; }";
+}
+
 Admin::Admin(QWidget *parent)
     : QMainWindow(parent)
 {
@@ -231,10 +238,11 @@ void Admin::setupLayout()
 void Admin::applyStyles()
 {
     centralWidget()->setStyleSheet(
-        "QWidget { background-color: #1e1e1e; color: #ffffff; }"
-        "QLabel#sectionTitle { color: #ffffff; font-size: 14px; font-weight: 600; "
+        QString("QWidget { background-color: %1; color: %2; }"
+        "QLabel#sectionTitle { color: %2; font-size: 14px; font-weight: 600; "
         "  font-family: 'Segoe UI', Arial, sans-serif; letter-spacing: 1px; }"
-        "QFrame { color: #3d3d3d; }"
+        "QFrame { color: %3; }")
+            .arg(StyleManager::getDarkBgPrimary(), StyleManager::getTextPrimary(), StyleManager::getDarkBorder()) +
         "QScrollBar:vertical { border: none; background: #1f1f1f; width: 12px; "
         "  border-radius: 6px; margin: 15px 0; }"
         "QScrollBar::handle:vertical { background-color: #4a4a4a; min-height: 30px; "
@@ -446,11 +454,7 @@ void Admin::onAddUserClicked()
     
     QComboBox* rolCombo = new QComboBox();
     rolCombo->addItems({"Profesor", "Administrador"});
-    rolCombo->setStyleSheet(
-        "QComboBox { " + mStyleManager->getLineEditStyle() + " min-height: 40px; }"
-        "QComboBox::drop-down { border: none; }"
-        "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; }"
-    );
+    rolCombo->setStyleSheet(comboBoxStyle(mStyleManager));
     
     QLabel* nombreLabel = new QLabel("Nombre:");
     nombreLabel->setStyleSheet(mStyleManager->getLabelSectionStyle());
@@ -578,10 +582,7 @@ void Admin::onEditUserClicked()
     QComboBox* rolCombo = new QComboBox();
     rolCombo->addItems({"Profesor", "Administrador"});
     rolCombo->setCurrentText(it->tipoRol);
-    rolCombo->setStyleSheet(
-        "QComboBox { " + mStyleManager->getLineEditStyle() + " min-height: 40px; }"
-        "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; }"
-    );
+    rolCombo->setStyleSheet(comboBoxStyle(mStyleManager));
     
     QLabel* nombreLabel = new QLabel("Nombre:");
     nombreLabel->setStyleSheet(mStyleManager->getLabelSectionStyle());
@@ -725,10 +726,7 @@ void Admin::onAddSubjectClicked()
     QComboBox* cursoCombo = new QComboBox();
     for (const auto& c : cursos)
         cursoCombo->addItem(c.año, c.id);
-    cursoCombo->setStyleSheet(
-        "QComboBox { " + mStyleManager->getLineEditStyle() + " min-height: 40px; }"
-        "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; }"
-    );
+    cursoCombo->setStyleSheet(comboBoxStyle(mStyleManager));
     
     QLabel* nombreLabel = new QLabel("Nombre:");
     nombreLabel->setStyleSheet(mStyleManager->getLabelSectionStyle());

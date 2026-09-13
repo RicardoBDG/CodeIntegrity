@@ -11,6 +11,11 @@
 #include <QRegularExpression>
 #include <qdiriterator.h>
 
+namespace {
+    constexpr int kJPlagTimeoutMs = 300000; // 5 minutos
+    constexpr int kMossTimeoutMs  = 600000; // 10 minutos
+}
+
 AnalysisCoordinator::AnalysisCoordinator(QObject* parent)
     : QObject(parent) {}
 
@@ -81,7 +86,7 @@ void AnalysisCoordinator::executeJPlag(const QString& submissionPath)
         QDir::toNativeSeparators(submissionPath)
     };
 
-    QTimer::singleShot(300000, this, [this]()
+    QTimer::singleShot(kJPlagTimeoutMs, this, [this]()
     {
         if (mAnalysisProcess) mAnalysisProcess->kill();
     });
@@ -120,7 +125,7 @@ void AnalysisCoordinator::executeMOSS(const QString& submissionPath)
         args << QDir::toNativeSeparators(it.next());
     }
 
-    QTimer::singleShot(600000, this, [this]()
+    QTimer::singleShot(kMossTimeoutMs, this, [this]()
     {
         if (mAnalysisProcess) mAnalysisProcess->kill();
     });

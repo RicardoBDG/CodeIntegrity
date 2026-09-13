@@ -20,13 +20,13 @@ Login::Login(QWidget *parent)
     QWidget* centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    setupUI();
+    setupUi();
     setupLayout();
     applyStyles();
     setupConnections();
     loadTestCredentials();
 
-    Logger::log(Logger::INFO, "Ventana de Login inicializada (Refactored)");
+    Logger::log(Logger::INFO, "Ventana de Login inicializada");
 }
 
 Login::~Login()
@@ -35,7 +35,7 @@ Login::~Login()
     Logger::log(Logger::INFO, "Ventana de Login cerrada");
 }
 
-void Login::setupUI()
+void Login::setupUi()
 {
     mTitleLabel = new QLabel("CodeIntegrity");
     mTitleLabel->setAlignment(Qt::AlignCenter);
@@ -131,10 +131,11 @@ void Login::applyStyles()
 {
     centralWidget()->setStyleSheet
         (
-            "QWidget { background-color: #1e1e1e; color: #ffffff; }" +
+            QString("QWidget { background-color: %1; color: %2; }")
+                .arg(StyleManager::getDarkBgPrimary(), StyleManager::getTextPrimary()) +
             mStyleManager->getLineEditStyle() +
             mStyleManager->getButtonStyle() +
-            "QFrame { color: #3d3d3d; }"
+            QString("QFrame { color: %1; }").arg(StyleManager::getDarkBorder())
             );
 
     mTitleLabel->setStyleSheet(mStyleManager->getLabelTitleStyle());
@@ -171,10 +172,10 @@ void Login::applyStyles()
 
 void Login::setupConnections()
 {
-    connect(mLoginButton, &QPushButton::clicked, this, &Login::loginButtonClicked);
+    connect(mLoginButton, &QPushButton::clicked, this, &Login::onLoginClicked);
     connect(mEmailInput, &QLineEdit::textChanged, this, &Login::onEmailChanged);
     connect(mPasswordInput, &QLineEdit::textChanged, this, &Login::onPasswordChanged);
-    connect(mPasswordInput, &QLineEdit::returnPressed, this, &Login::loginButtonClicked);
+    connect(mPasswordInput, &QLineEdit::returnPressed, this, &Login::onLoginClicked);
 }
 
 void Login::loadTestCredentials()
@@ -227,7 +228,7 @@ bool Login::validateInput(const QString& email, const QString& password)
     return true;
 }
 
-void Login::loginButtonClicked()
+void Login::onLoginClicked()
 {
     QString email = mEmailInput->text().trimmed();
     QString password = mPasswordInput->text();

@@ -139,7 +139,7 @@ QWidget* UIComponentFactory::createTaskWidget(const TaskInfo& task,
 }
 
 
-void UIComponentFactory::applyUniformStyle(QWidget* widget, QListWidgetItem* item)
+void UIComponentFactory::applyUniformStyle(QListWidgetItem* item)
 {
     if (item)
     {

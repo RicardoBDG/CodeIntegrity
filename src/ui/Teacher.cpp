@@ -221,7 +221,8 @@ void Teacher::setupLayout()
 void Teacher::applyStyles()
 {
     centralWidget()->setStyleSheet(
-        "QWidget { background-color: #1e1e1e; color: #ffffff; }" +
+        QString("QWidget { background-color: %1; color: %2; }")
+            .arg(StyleManager::getDarkBgPrimary(), StyleManager::getTextPrimary()) +
         mStyleManager->getLineEditStyle() +
         mStyleManager->getButtonStyle() +
         "QScrollBar:vertical { border: none; background: #1f1f1f; width: 12px; "
@@ -230,7 +231,7 @@ void Teacher::applyStyles()
         "  border-radius: 6px; } "
         "QScrollBar::handle:vertical:hover { background-color: #5a5a5a; } "
         "QScrollBar::sub-line:vertical, QScrollBar::add-line:vertical { height: 0px; } "
-        "QFrame { color: #3d3d3d; }"
+        + QString("QFrame { color: %1; }").arg(StyleManager::getDarkBorder())
         );
 
     mTitleLabel->setStyleSheet(
@@ -363,7 +364,7 @@ void Teacher::crearWidgetAsignatura(const SubjectInfo& asignatura)
         [this, idCapturado]() { cargarTareasAsignatura(idCapturado); }
         );
 
-    mUIFactory->applyUniformStyle(widget, item);
+    mUIFactory->applyUniformStyle(item);
     mAsignaturasListWidget->setItemWidget(item, widget);
 }
 
@@ -392,7 +393,7 @@ void Teacher::crearWidgetTarea(const TaskInfo& tarea)
         }
         );
 
-    mUIFactory->applyUniformStyle(widget, item);
+    mUIFactory->applyUniformStyle(item);
     mTareasListWidget->setItemWidget(item, widget);
 }
 

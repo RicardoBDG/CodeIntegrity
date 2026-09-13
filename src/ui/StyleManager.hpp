@@ -57,6 +57,8 @@ public:
     static constexpr const char* getPrimaryColor() { return PRIMARY_COLOR; }
     static constexpr const char* getErrorColor() { return ERROR_COLOR; }
     static constexpr const char* getDarkBgPrimary() { return DARK_BG_PRIMARY; }
+    static constexpr const char* getTextPrimary() { return TEXT_PRIMARY; }
+    static constexpr const char* getDarkBorder() { return DARK_BORDER; }
 };
 
 #endif

@@ -23,7 +23,7 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private slots:
-    void loginButtonClicked();
+    void onLoginClicked();
     void onEmailChanged();
     void onPasswordChanged();
 
@@ -42,7 +42,7 @@ private:
     bool mEmailHasError = false;
     bool mPasswordHasError = false;
 
-    void setupUI();
+    void setupUi();
     void applyStyles();
     void setupConnections();
     void setupLayout();

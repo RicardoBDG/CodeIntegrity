@@ -12,12 +12,11 @@ int main(int argc, char *argv[])
     Logger::log(Logger::INFO, "Aplicación iniciada");
 
     DataBaseManager* dbManager = DataBaseManager::getInstance();
-    StyleManager styleManager;
 
     if (!dbManager->connectToDatabase())
     {
         Logger::log(Logger::ERROR_LEVEL, "No se pudo conectar a la base de datos");
-        QMessageBox::critical(nullptr, "Error de Conexion",
+        QMessageBox::critical(nullptr, "Error de Conexión",
                               "No se pudo conectar a la base de datos.\n\n"
                               "Verifica que:\n"
                               "- PostgreSQL esté ejecutandose en localhost:5432\n"

@@ -90,7 +90,7 @@ QString StyleManager::baseListWidgetStyle(const QString& bgColor, const QString&
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
             background: none;
         }
-    )").arg(bgColor, "#3d3d3d", itemBgColor, hoverColor, selectColor);
+    )").arg(bgColor, DARK_BORDER, itemBgColor, hoverColor, selectColor);
 }
 
 QString StyleManager::getListWidgetStyle()

@@ -6,6 +6,36 @@
 
 DataBaseManager* DataBaseManager::instance = nullptr;
 
+namespace {
+bool validateUserFields(const QString& nombre, const QString& apellido,
+                        const QString& email, const QString& contrasena,
+                        const QString& tipoRol, QString* errorMsg)
+{
+    if (nombre.trimmed().isEmpty() || apellido.trimmed().isEmpty() ||
+        email.trimmed().isEmpty()  || contrasena.isEmpty() || tipoRol.trimmed().isEmpty())
+    {
+        if (errorMsg) *errorMsg = "Todos los campos son requeridos";
+        return false;
+    }
+    if (!email.contains("@"))
+    {
+        if (errorMsg) *errorMsg = "Email inválido";
+        return false;
+    }
+    if (contrasena.length() < 8)
+    {
+        if (errorMsg) *errorMsg = "Contraseña debe tener mínimo 8 caracteres";
+        return false;
+    }
+    if (tipoRol != "Administrador" && tipoRol != "Profesor")
+    {
+        if (errorMsg) *errorMsg = "Tipo de rol inválido";
+        return false;
+    }
+    return true;
+}
+} // namespace
+
 DataBaseManager::DataBaseManager() {}
 
 DataBaseManager::~DataBaseManager()
@@ -72,6 +102,7 @@ bool DataBaseManager::connectToDatabase()
     }
     else
     {
+        mDataBase = QSqlDatabase::addDatabase("QPSQL");
         mDataBase.setHostName(DatabaseConfig::getHost());
         mDataBase.setDatabaseName(DatabaseConfig::DATABASE);
         mDataBase.setUserName(DatabaseConfig::getUsername());
@@ -264,7 +295,7 @@ int DataBaseManager::getCurrentUserId(const QString& email)
     query.prepare("SELECT ID_Usuario FROM Usuario WHERE Email = :email");
     query.bindValue(":email", email);
 
-    if (query.exec() && query.next())
+    if (executeQuery(query) && query.next())
         return query.value(0).toInt();
 
     Logger::log(Logger::WARNING, QString("No se encontró ID para: %1").arg(email));
@@ -474,27 +505,8 @@ bool DataBaseManager::insertUser(const QString& nombre, const QString& apellido,
                                  const QString& email, const QString& contrasena,
                                  const QString& tipoRol, QString* errorMsg)
 {
-    if (nombre.trimmed().isEmpty() || apellido.trimmed().isEmpty() ||
-        email.trimmed().isEmpty()  || contrasena.isEmpty() || tipoRol.trimmed().isEmpty())
-    {
-        if (errorMsg) *errorMsg = "Todos los campos son requeridos";
+    if (!validateUserFields(nombre, apellido, email, contrasena, tipoRol, errorMsg))
         return false;
-    }
-    if (!email.contains("@"))
-    {
-        if (errorMsg) *errorMsg = "Email inválido";
-        return false;
-    }
-    if (contrasena.length() < 8)
-    {
-        if (errorMsg) *errorMsg = "Contraseña debe tener mínimo 8 caracteres";
-        return false;
-    }
-    if (tipoRol != "Administrador" && tipoRol != "Profesor")
-    {
-        if (errorMsg) *errorMsg = "Tipo de rol inválido";
-        return false;
-    }
 
     QString hashedPassword = PasswordManager::hashPassword(contrasena);
 
@@ -603,27 +615,8 @@ bool DataBaseManager::updateUser(int id, const QString& nombre, const QString& a
                                  const QString& email, const QString& contrasena,
                                  const QString& tipoRol, QString* errorMsg)
 {
-    if (nombre.trimmed().isEmpty() || apellido.trimmed().isEmpty() ||
-        email.trimmed().isEmpty()  || contrasena.isEmpty() || tipoRol.trimmed().isEmpty())
-    {
-        if (errorMsg) *errorMsg = "Todos los campos son requeridos";
+    if (!validateUserFields(nombre, apellido, email, contrasena, tipoRol, errorMsg))
         return false;
-    }
-    if (!email.contains("@"))
-    {
-        if (errorMsg) *errorMsg = "Email inválido";
-        return false;
-    }
-    if (contrasena.length() < 8)
-    {
-        if (errorMsg) *errorMsg = "Contraseña debe tener mínimo 8 caracteres";
-        return false;
-    }
-    if (tipoRol != "Administrador" && tipoRol != "Profesor")
-    {
-        if (errorMsg) *errorMsg = "Tipo de rol inválido";
-        return false;
-    }
 
     QString hashedPassword = PasswordManager::hashPassword(contrasena);
 

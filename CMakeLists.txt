@@ -157,6 +157,40 @@ if(WIN32)
         message(WARNING "libpq.dll no encontrado en: ${PG_DLL}")
     endif()
 
+    # Driver QPSQL de Qt (obligatorio para QSqlDatabase::addDatabase("QPSQL"))
+    get_filename_component(QT_ROOT_DIR "${Qt6_DIR}/../../.." ABSOLUTE)
+    set(QT_PSQL_DRIVER "${QT_ROOT_DIR}/plugins/sqldrivers/qsqlpsql.dll")
+    if(EXISTS "${QT_PSQL_DRIVER}")
+        add_custom_command(TARGET codeIntegrity POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:codeIntegrity>/sqldrivers"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${QT_PSQL_DRIVER}"
+                "$<TARGET_FILE_DIR:codeIntegrity>/sqldrivers"
+            COMMENT "Copiando driver QPSQL"
+        )
+    else()
+        message(WARNING "Driver QPSQL no encontrado en: ${QT_PSQL_DRIVER}")
+    endif()
+
+    # DLLs de las que depende libpq.dll en tiempo de ejecucion:
+    # OpenSSL (libssl/libcrypto) y gettext (libintl/libiconv, usadas
+    # internamente por libpq.dll para mensajes/locale)
+    file(GLOB PG_RUNTIME_DLLS
+        "${PostgreSQL_ROOT}/bin/libssl-*.dll"
+        "${PostgreSQL_ROOT}/bin/libcrypto-*.dll"
+        "${PostgreSQL_ROOT}/bin/libintl-*.dll"
+        "${PostgreSQL_ROOT}/bin/libiconv-*.dll"
+    )
+    foreach(pg_dll ${PG_RUNTIME_DLLS})
+        add_custom_command(TARGET codeIntegrity POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${pg_dll}"
+                $<TARGET_FILE_DIR:codeIntegrity>
+            COMMENT "Copiando ${pg_dll}"
+        )
+    endforeach()
+
     qt_generate_deploy_app_script(
         TARGET codeIntegrity
         OUTPUT_SCRIPT deploy_script

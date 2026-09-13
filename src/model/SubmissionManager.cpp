@@ -7,7 +7,6 @@
 #include <QProcess>
 #include <QMessageBox>
 #include <QCoreApplication>
-#include <cstdlib>
 
 SubmissionManager::SubmissionManager(QObject* parent)
     : QObject(parent) {}
@@ -49,6 +48,19 @@ void SubmissionManager::processSubmissionFile(int taskId, const QString& filePat
     emit extractionStarted();
 
     extractRAR(filePath, mCurrentSubmissionPath);
+
+    if (mCurrentSubmissionPath.isEmpty())
+    {
+        // extractRAR() ya ha limpiado y emitido extractionFinished(false, ...) en caso de fallo
+        if (mProgressDialog)
+        {
+            mProgressDialog->close();
+            delete mProgressDialog;
+            mProgressDialog = nullptr;
+        }
+        return;
+    }
+
     searchCppFiles(mCurrentSubmissionPath);
 
     if (mProgressDialog)
@@ -83,6 +95,11 @@ QString SubmissionManager::findUnrarExecutable() const
             return path;
         }
     }
+
+    QString fromPath = QStandardPaths::findExecutable("unrar");
+    if (!fromPath.isEmpty())
+        return fromPath;
+
     return "";
 }
 
@@ -102,32 +119,22 @@ void SubmissionManager::extractRAR(const QString& rarPath, const QString& destin
         dir.mkpath(".");
     }
 
-    QString command = QString("\"\"%1\" x -y \"%2\" \"%3\"\"")
-                          .arg(QDir::toNativeSeparators(unrarPath),
-                               QDir::toNativeSeparators(rarPath),
-                               QDir::toNativeSeparators(destination) + "\\");
+    QProcess proceso;
+    proceso.start(unrarPath, QStringList() << "x" << "-y" << rarPath << destination);
 
-    int resultado = std::system(command.toStdString().c_str());
-
-    if (resultado != 0)
+    if (!proceso.waitForFinished(30000))
     {
-        QProcess proceso;
-        proceso.start(unrarPath, QStringList() << "x" << "-y" << rarPath << destination);
+        emit extractionFinished(false, "Timeout en la extracción del RAR");
+        cleanupTemporaryFiles();
+        return;
+    }
 
-        if (!proceso.waitForFinished(30000))
-        {
-            emit extractionFinished(false, "Timeout en la extracción del RAR");
-            cleanupTemporaryFiles();
-            return;
-        }
-
-        if (proceso.exitCode() != 0)
-        {
-            QString errorMsg = QString::fromLocal8Bit(proceso.readAllStandardError());
-            emit extractionFinished(false, "Error en extracción: " + errorMsg);
-            cleanupTemporaryFiles();
-            return;
-        }
+    if (proceso.exitCode() != 0)
+    {
+        QString errorMsg = QString::fromLocal8Bit(proceso.readAllStandardError());
+        emit extractionFinished(false, "Error en extracción: " + errorMsg);
+        cleanupTemporaryFiles();
+        return;
     }
 }
 

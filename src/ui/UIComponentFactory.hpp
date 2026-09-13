@@ -22,7 +22,7 @@ public:
                               std::function<void()> onDelete,
                               std::function<void(QPushButton*)> onSelect);
 
-    void applyUniformStyle(QWidget* widget, QListWidgetItem* item);
+    void applyUniformStyle(QListWidgetItem* item);
 
     QPushButton* createButton(const QString& text, const QString& color,
                               const QString& textColor);
