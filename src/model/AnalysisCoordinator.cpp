@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QPointer>
 #include <qdiriterator.h>
 
 namespace {
@@ -39,6 +40,18 @@ QString AnalysisCoordinator::createReportDirectory()
 
 void AnalysisCoordinator::runAnalysis(AnalysisTool tool, const QString& submissionPath)
 {
+    // Sin este guard, lanzar un segundo análisis mientras el primero sigue en
+    // marcha pisa mAnalysisProcess con el QProcess nuevo: el proceso anterior
+    // queda huérfano (nunca se mata ni se limpia) y, peor, su QTimer de timeout
+    // puede acabar matando al proceso NUEVO cuando venza (ver executeJPlag/
+    // executeMOSS, donde ahora se captura el QProcess concreto con QPointer
+    // precisamente para evitar esa confusión).
+    if (mAnalysisProcess && mAnalysisProcess->state() != QProcess::NotRunning)
+    {
+        emit analysisError("Ya hay un análisis en curso");
+        return;
+    }
+
     if (submissionPath.isEmpty())
     {
         emit analysisError("Ruta de entregas vacía");
@@ -86,9 +99,14 @@ void AnalysisCoordinator::executeJPlag(const QString& submissionPath)
         QDir::toNativeSeparators(submissionPath)
     };
 
-    QTimer::singleShot(kJPlagTimeoutMs, this, [this]()
+    // Se captura ESTE QProcess concreto (no el miembro mAnalysisProcess) para que,
+    // si para cuando venza el timeout ya se ha lanzado otro análisis y
+    // mAnalysisProcess apunta a un proceso distinto, el timeout no mate el
+    // proceso equivocado. QPointer se pone a nullptr solo si el objeto se ha
+    // destruido, así que también es seguro si el proceso ya terminó y fue borrado.
+    QTimer::singleShot(kJPlagTimeoutMs, this, [proceso = QPointer<QProcess>(mAnalysisProcess)]()
     {
-        if (mAnalysisProcess) mAnalysisProcess->kill();
+        if (proceso) proceso->kill();
     });
 
     mAnalysisProcess->start("java", args);
@@ -125,9 +143,11 @@ void AnalysisCoordinator::executeMOSS(const QString& submissionPath)
         args << QDir::toNativeSeparators(it.next());
     }
 
-    QTimer::singleShot(kMossTimeoutMs, this, [this]()
+    // Mismo motivo que en executeJPlag: se captura el QProcess concreto, no el
+    // miembro, para no arriesgarse a matar un análisis distinto lanzado después.
+    QTimer::singleShot(kMossTimeoutMs, this, [proceso = QPointer<QProcess>(mAnalysisProcess)]()
     {
-        if (mAnalysisProcess) mAnalysisProcess->kill();
+        if (proceso) proceso->kill();
     });
 
     mAnalysisProcess->start(perlPath, args);
@@ -148,6 +168,12 @@ void AnalysisCoordinator::onMossOutputAvailable()
 
 void AnalysisCoordinator::onAnalysisProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
+    // Cuando un QProcess crashea, Qt emite errorOccurred(Crashed) Y DESPUÉS
+    // finished(): si onAnalysisProcessError ya limpió mAnalysisProcess (lo puso a
+    // nullptr), este segundo aviso no debe volver a emitir señales ni a hacer
+    // deleteLater() por segunda vez sobre el mismo puntero.
+    if (!mAnalysisProcess) return;
+
     if (mSelectedTool == AnalysisTool::JPlag)
     {
         if (exitCode == 0 && !mReportOpened)
@@ -175,10 +201,22 @@ void AnalysisCoordinator::onAnalysisProcessFinished(int exitCode, QProcess::Exit
     }
 
     mSelectedTool = AnalysisTool::None;
+
+    // El proceso ya ha terminado (con éxito o no): se programa su borrado y se
+    // olvida el puntero para que un siguiente runAnalysis() no lo confunda con
+    // el proceso anterior, y para que el guard de arriba corte una segunda
+    // notificación duplicada (ver comentario al inicio de esta función).
+    mAnalysisProcess->deleteLater();
+    mAnalysisProcess = nullptr;
 }
 
 void AnalysisCoordinator::onAnalysisProcessError(QProcess::ProcessError error)
 {
+    // Mismo motivo que en onAnalysisProcessFinished: evita procesar dos veces
+    // el mismo fallo si Qt emite errorOccurred() y finished() para el mismo
+    // proceso (típico en un crash).
+    if (!mAnalysisProcess) return;
+
     QString errorMsg;
     switch (error)
     {
@@ -196,6 +234,10 @@ void AnalysisCoordinator::onAnalysisProcessError(QProcess::ProcessError error)
     }
 
     emit analysisError(errorMsg);
+
+    mSelectedTool = AnalysisTool::None;
+    mAnalysisProcess->deleteLater();
+    mAnalysisProcess = nullptr;
 }
 
 void AnalysisCoordinator::cancelAnalysis()

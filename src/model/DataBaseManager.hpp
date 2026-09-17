@@ -43,6 +43,14 @@ public:
                     const QString& email, const QString& contrasena,
                     const QString& tipoRol, QString* errorMsg = nullptr);
 
+    // Igual que updateUser, pero sin tocar la columna Contraseña. Se usa cuando
+    // el admin deja el campo de contraseña en blanco para no cambiarla: pasar el
+    // valor ya hasheado de vuelta a updateUser() haría PasswordManager::hashPassword
+    // sobre un hash ya existente y dejaría al usuario sin poder volver a iniciar sesión.
+    bool updateUserKeepingPassword(int id, const QString& nombre, const QString& apellido,
+                                   const QString& email, const QString& tipoRol,
+                                   QString* errorMsg = nullptr);
+
     bool updateSubject(int id, const QString& nombre, const QString& descripcion,
                        QString* errorMsg = nullptr);
 

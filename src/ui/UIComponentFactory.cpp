@@ -102,6 +102,11 @@ QWidget* UIComponentFactory::createTaskWidget(const TaskInfo& task,
     botonesLayout->setSpacing(8);
 
     auto subirBtn = new QPushButton("Subir");
+    // Nombre de objeto fijo para que Teacher pueda recuperar con findChildren()
+    // todos los botones "Subir" visibles tras reconstruir la lista de tareas
+    // (ver Teacher::cargarTareasAsignatura), sin tener que devolver el puntero
+    // de cada fila por otra vía.
+    subirBtn->setObjectName(QStringLiteral("btnSubir"));
     subirBtn->setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT);
     subirBtn->setStyleSheet(mStyleManager.getDisabledButtonStyle("#4a4a4a", "#888888"));
     subirBtn->setEnabled(false);

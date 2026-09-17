@@ -340,6 +340,18 @@ void Teacher::cargarTareasAsignatura(int idAsignatura)
     mTareasListWidget->clear();
     mAsignaturaSeleccionada = idAsignatura;
 
+    // mTareasListWidget->clear() destruye los widgets de cada fila (incluidos sus
+    // botones "Subir"), así que cualquier estado que dependiera de la tarea/fila
+    // seleccionada previamente queda inválido: se resetea aquí para no arrastrar
+    // ni un puntero colgante ni un "archivo subido" que ya no se corresponde con
+    // ningún botón visible.
+    mTareaSeleccionadaId     = -1;
+    mCurrentSubmissionTaskId = -1;
+    mUploadingTaskId         = -1;
+    mCurrentSubmissionPath.clear();
+    mBotonesSubir.clear();
+    actualizarTareaSeleccionada("");
+
     mTareasActuales = mDb->getTasksBySubject(idAsignatura);
 
     if (mTareasActuales.empty())
@@ -347,11 +359,17 @@ void Teacher::cargarTareasAsignatura(int idAsignatura)
         QListWidgetItem* item = new QListWidgetItem("No hay tareas para esta asignatura");
         item->setFlags(Qt::NoItemFlags);
         mTareasListWidget->addItem(item);
+        actualizarEstadoBotonAnalisis();
         return;
     }
 
     for (const auto& tarea : mTareasActuales)
         crearWidgetTarea(tarea);
+
+    const QList<QPushButton*> botonesEncontrados =
+        mTareasListWidget->findChildren<QPushButton*>(QStringLiteral("btnSubir"));
+    mBotonesSubir.assign(botonesEncontrados.begin(), botonesEncontrados.end());
+    actualizarEstadoBotonAnalisis();
 }
 
 void Teacher::crearWidgetAsignatura(const SubjectInfo& asignatura)
@@ -387,9 +405,8 @@ void Teacher::crearWidgetTarea(const TaskInfo& tarea)
         [this, idCapturado, titulo]() {
             eliminarTarea(idCapturado, titulo);
         },
-        [this, titulo](QPushButton* btn) {
-            Q_UNUSED(btn)
-            seleccionarTarea(titulo);
+        [this, idCapturado, titulo](QPushButton* subirBtnActivo) {
+            seleccionarTarea(titulo, idCapturado, subirBtnActivo);
         }
         );
 
@@ -651,9 +668,10 @@ void Teacher::editarTarea(int idTarea, const QString& nombreTarea, const QString
         if (mDb->updateTask(idTarea, nuevoTitulo, nuevaDesc, fechaLimite, &errorMsg))
         {
             Logger::log(Logger::INFO, QString("Tarea %1 actualizada").arg(idTarea));
-            if (mTareaSeleccionada == nombreTarea)
-                actualizarTareaSeleccionada(nuevoTitulo);
             dialog.accept();
+            // cargarTareasAsignatura reconstruye todas las filas (y sus botones),
+            // así que ya se encarga de limpiar la tarea seleccionada y el archivo
+            // subido en curso; no hace falta tocarlos aquí a mano.
             cargarTareasAsignatura(mAsignaturaSeleccionada);
         }
         else
@@ -678,12 +696,8 @@ void Teacher::eliminarTarea(int idTarea, const QString& nombreTarea)
     if (mDb->deleteTask(idTarea, &errorMsg))
     {
         Logger::log(Logger::INFO, QString("Tarea %1 eliminada").arg(idTarea));
-        if (mTareaSeleccionada == nombreTarea)
-        {
-            actualizarTareaSeleccionada("");
-            mRunAnalysisButton->setEnabled(false);
-            mRunAnalysisButton->setStyleSheet(mStyleManager->getDisabledButtonStyle("#4a4a4a", "#888888"));
-        }
+        // cargarTareasAsignatura reconstruye la lista de tareas y ya resetea la
+        // selección y el archivo subido en curso (sus botones dejan de existir).
         cargarTareasAsignatura(mAsignaturaSeleccionada);
     }
     else
@@ -692,18 +706,27 @@ void Teacher::eliminarTarea(int idTarea, const QString& nombreTarea)
     }
 }
 
-void Teacher::seleccionarTarea(const QString& nombreTarea)
+void Teacher::seleccionarTarea(const QString& nombreTarea, int idTarea, QPushButton* subirBtnActivo)
 {
     actualizarTareaSeleccionada(nombreTarea);
+    mTareaSeleccionadaId = idTarea;
 
-    bool hayHerramienta = mMossCheckBox->isChecked() || mJplagCheckBox->isChecked();
-    bool hayArchivo     = !mCurrentSubmissionPath.isEmpty();
-
-    if (hayHerramienta && hayArchivo)
+    // Antes, el botón "Subir" de cada fila se activaba al pulsar "Seleccionar" pero
+    // nunca se desactivaban los de las demás filas: podían quedar varios botones
+    // "Subir" activos a la vez y era posible subir un archivo para una tarea
+    // distinta a la que aparecía como seleccionada en pantalla. Ahora solo el botón
+    // de la tarea recién seleccionada queda habilitado; el resto se deshabilita.
+    for (QPushButton* btn : mBotonesSubir)
     {
-        mRunAnalysisButton->setEnabled(true);
-        mRunAnalysisButton->setStyleSheet(mStyleManager->getButtonStyle("#4CAF50", "#ffffff"));
+        if (!btn) continue;
+        bool esElActivo = (btn == subirBtnActivo);
+        btn->setEnabled(esElActivo);
+        btn->setStyleSheet(esElActivo
+            ? mStyleManager->getButtonStyle("#6f42c1", "#ffffff")
+            : mStyleManager->getDisabledButtonStyle("#4a4a4a", "#888888"));
     }
+
+    actualizarEstadoBotonAnalisis();
 
     Logger::log(Logger::INFO, QString("Tarea seleccionada: %1").arg(nombreTarea));
 }
@@ -719,6 +742,11 @@ void Teacher::subirArchivoTarea(int idTarea, const QString& nombreTarea)
 
     if (filePath.isEmpty()) return;
 
+    // Se guarda qué tarea está subiendo el archivo para poder asociar
+    // correctamente mCurrentSubmissionPath a esa tarea cuando termine la
+    // extracción (ver onSubmissionExtractionFinished).
+    mUploadingTaskId = idTarea;
+
     Logger::log(Logger::INFO, QString("Subiendo archivo para tarea %1: %2").arg(idTarea).arg(filePath));
     mSubmissionManager->processSubmissionFile(idTarea, filePath);
 }
@@ -732,11 +760,20 @@ void Teacher::handleToolSelection(bool checked)
             if (btn != sender) btn->setChecked(false);
     }
 
-    bool hayHerramienta = mMossCheckBox->isChecked() || mJplagCheckBox->isChecked();
-    bool hayTarea       = !mTareaSeleccionada.isEmpty();
-    bool hayArchivo     = !mCurrentSubmissionPath.isEmpty();
+    actualizarEstadoBotonAnalisis();
+}
 
-    bool listo = hayHerramienta && hayTarea && hayArchivo;
+void Teacher::actualizarEstadoBotonAnalisis()
+{
+    bool hayHerramienta = mMossCheckBox->isChecked() || mJplagCheckBox->isChecked();
+    bool hayTarea        = mTareaSeleccionadaId != -1;
+    // El archivo subido solo cuenta si pertenece a la tarea actualmente
+    // seleccionada: evita ejecutar el análisis con los ficheros de una tarea
+    // distinta a la que se muestra seleccionada (la raíz del bug original).
+    bool archivoDeEsaTarea = mCurrentSubmissionTaskId != -1
+                          && mCurrentSubmissionTaskId == mTareaSeleccionadaId;
+
+    bool listo = hayHerramienta && hayTarea && archivoDeEsaTarea;
     mRunAnalysisButton->setEnabled(listo);
     mRunAnalysisButton->setStyleSheet(
         listo ? mStyleManager->getButtonStyle("#4CAF50", "#ffffff")
@@ -754,6 +791,18 @@ void Teacher::checkRunAnalysis()
     if (mTareaSeleccionada.isEmpty())
     {
         QMessageBox::warning(this, "Advertencia", "Selecciona una tarea primero");
+        return;
+    }
+    if (mCurrentSubmissionTaskId != mTareaSeleccionadaId)
+    {
+        // Comprobación de seguridad: si esto llega a dispararse es que el archivo
+        // subido y la tarea seleccionada no coinciden (p.ej. se subió un archivo
+        // para una tarea y luego se seleccionó otra). Con los botones "Subir" ahora
+        // mutuamente excluyentes no debería ocurrir desde la UI, pero se deja como
+        // última barrera para no analizar nunca los ficheros de la tarea equivocada.
+        QMessageBox::warning(this, "Advertencia",
+                             "El archivo subido no corresponde a la tarea seleccionada. "
+                             "Vuelve a subir el archivo de entregas para esta tarea.");
         return;
     }
 
@@ -781,26 +830,27 @@ void Teacher::onSubmissionExtractionFinished(bool success, const QString& messag
 {
     if (success)
     {
-        mCurrentSubmissionPath = mSubmissionManager->getCurrentSubmissionPath();
+        mCurrentSubmissionPath   = mSubmissionManager->getCurrentSubmissionPath();
+        // El archivo recién extraído queda asociado a la tarea que estaba
+        // subiéndose, no a "la tarea seleccionada en este instante": si el
+        // profesor cambia de tarea seleccionada mientras se extrae el RAR, este
+        // archivo se sigue etiquetando correctamente como perteneciente a
+        // mUploadingTaskId (ver actualizarEstadoBotonAnalisis / checkRunAnalysis).
+        mCurrentSubmissionTaskId = mUploadingTaskId;
         Logger::log(Logger::INFO, "Extracción completada: " + message);
-
-        bool hayHerramienta = mMossCheckBox->isChecked() || mJplagCheckBox->isChecked();
-        bool hayTarea       = !mTareaSeleccionada.isEmpty();
-
-        if (hayHerramienta && hayTarea)
-        {
-            mRunAnalysisButton->setEnabled(true);
-            mRunAnalysisButton->setStyleSheet(mStyleManager->getButtonStyle("#4CAF50", "#ffffff"));
-        }
 
         QMessageBox::information(this, "Extracción completada", message);
     }
     else
     {
         mCurrentSubmissionPath.clear();
+        mCurrentSubmissionTaskId = -1;
         Logger::log(Logger::ERROR_LEVEL, "Error en extracción: " + message);
         QMessageBox::critical(this, "Error en extracción", message);
     }
+
+    mUploadingTaskId = -1;
+    actualizarEstadoBotonAnalisis();
 }
 
 void Teacher::onAnalysisFinished(bool success, const QString& reportUrl)

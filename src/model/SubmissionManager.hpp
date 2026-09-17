@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QObject>
 #include <QProgressDialog>
+#include <QProcess>
 
 class SubmissionManager : public QObject
 {
@@ -24,15 +25,24 @@ signals:
     void extractionFinished(bool success, const QString& message);
     void extractionProgress(int value);
 
+private slots:
+    // La extracción con unrar corre en un QProcess asíncrono (ver extractRAR):
+    // antes se esperaba con waitForFinished(30000) bloqueando el hilo de UI,
+    // lo que dejaba la ventana congelada mientras el RAR se extraía.
+    void onExtractProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onExtractProcessError(QProcess::ProcessError error);
+
 private:
     void extractRAR(const QString& rarPath, const QString& destination);
     void searchCppFiles(const QString& basePath);
     QString findUnrarExecutable() const;
     void cleanupTemporaryFiles();
+    void finishWithError(const QString& message);
 
     QString mCurrentSubmissionPath;
     QStringList mExtractedCppFiles;
     QProgressDialog* mProgressDialog = nullptr;
+    QProcess* mExtractProcess = nullptr;
 };
 
 #endif

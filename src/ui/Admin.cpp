@@ -636,17 +636,24 @@ void Admin::onEditUserClicked()
             return;
         }
         
-        if (pass.isEmpty())
-            pass = it->contrasena;
-        else if (pass.length() < 8)
+        if (!pass.isEmpty() && pass.length() < 8)
         {
             QMessageBox::warning(&dialog, "Contraseña débil",
                                "La contraseña debe tener al menos 8 caracteres");
             return;
         }
-        
+
         QString errorMsg;
-        if (mDb->updateUser(id, nombre, apellido, email, pass, rol, &errorMsg))
+        // Si se deja la contraseña en blanco NO se debe pasar it->contrasena (que ya
+        // es un hash) a updateUser: éste vuelve a hashearla con PasswordManager::
+        // hashPassword y el usuario se queda sin poder iniciar sesión con su contraseña
+        // real. updateUserKeepingPassword actualiza el resto de campos sin tocar la
+        // columna Contraseña.
+        bool ok = pass.isEmpty()
+                  ? mDb->updateUserKeepingPassword(id, nombre, apellido, email, rol, &errorMsg)
+                  : mDb->updateUser(id, nombre, apellido, email, pass, rol, &errorMsg);
+
+        if (ok)
         {
             QMessageBox::information(&dialog, "Éxito", "Usuario actualizado correctamente");
             dialog.accept();
@@ -1079,8 +1086,12 @@ void Admin::onAssignTeachersClicked()
     });
     
     connect(closeBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-    
+
     dialog.exec();
+
+    // Refresca la lista de asignaturas para reflejar los cambios de profesorado
+    // hechos dentro del diálogo (asignar/desasignar no tocan mSubjectsListWidget).
+    loadSubjects();
 }
 
 void Admin::onAddCourseClicked()

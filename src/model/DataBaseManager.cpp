@@ -7,29 +7,56 @@
 DataBaseManager* DataBaseManager::instance = nullptr;
 
 namespace {
-bool validateUserFields(const QString& nombre, const QString& apellido,
-                        const QString& email, const QString& contrasena,
-                        const QString& tipoRol, QString* errorMsg)
+// Regex simple pero mucho más estricta que el antiguo email.contains("@"):
+// exige usuario, arroba, dominio con al menos un punto y TLD de 2+ letras.
+// No pretende validar RFC 5322 al completo (nadie lo necesita aquí), solo
+// filtrar los casos obviamente inválidos que "contains('@')" dejaba pasar
+// (p.ej. "@", "a@b", "sin-arroba.com").
+const QRegularExpression kEmailRegex(
+    R"(^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$)");
+
+// Validaciones comunes a nombre/apellido/email/rol, usadas tanto al crear
+// como al editar un usuario. La contraseña se valida aparte (ver
+// validateUserFields) porque al editar sin cambiarla no hay contraseña que
+// comprobar.
+bool validateCommonUserFields(const QString& nombre, const QString& apellido,
+                              const QString& email, const QString& tipoRol,
+                              QString* errorMsg)
 {
     if (nombre.trimmed().isEmpty() || apellido.trimmed().isEmpty() ||
-        email.trimmed().isEmpty()  || contrasena.isEmpty() || tipoRol.trimmed().isEmpty())
+        email.trimmed().isEmpty()  || tipoRol.trimmed().isEmpty())
     {
         if (errorMsg) *errorMsg = "Todos los campos son requeridos";
         return false;
     }
-    if (!email.contains("@"))
+    if (!kEmailRegex.match(email).hasMatch())
     {
         if (errorMsg) *errorMsg = "Email inválido";
-        return false;
-    }
-    if (contrasena.length() < 8)
-    {
-        if (errorMsg) *errorMsg = "Contraseña debe tener mínimo 8 caracteres";
         return false;
     }
     if (tipoRol != "Administrador" && tipoRol != "Profesor")
     {
         if (errorMsg) *errorMsg = "Tipo de rol inválido";
+        return false;
+    }
+    return true;
+}
+
+bool validateUserFields(const QString& nombre, const QString& apellido,
+                        const QString& email, const QString& contrasena,
+                        const QString& tipoRol, QString* errorMsg)
+{
+    if (!validateCommonUserFields(nombre, apellido, email, tipoRol, errorMsg))
+        return false;
+
+    if (contrasena.isEmpty())
+    {
+        if (errorMsg) *errorMsg = "Todos los campos son requeridos";
+        return false;
+    }
+    if (contrasena.length() < 8)
+    {
+        if (errorMsg) *errorMsg = "Contraseña debe tener mínimo 8 caracteres";
         return false;
     }
     return true;
@@ -82,12 +109,11 @@ bool DataBaseManager::deleteRecord(const QString& table, int id)
 {
     QSqlQuery query(mDataBase);
 
-    QString idColumn;
-    if      (table == "Usuario")          idColumn = "ID_Usuario";
-    else if (table == "Asignatura")       idColumn = "ID_Asignatura";
-    else if (table == "CursoAcademico")   idColumn = "ID_CursoAcademico";
-    else if (table == "Tarea")            idColumn = "ID_Tarea";
-    else                                  idColumn = QString("ID_%1").arg(table);
+    // Todas las tablas de este esquema siguen el patrón "ID_<NombreTabla>"
+    // (ID_Usuario, ID_Asignatura, ID_CursoAcademico, ID_Tarea), así que el
+    // antiguo if/else por tabla era código muerto: nunca entraba en una
+    // rama distinta del "else" genérico que ya cubría todos los casos.
+    const QString idColumn = QString("ID_%1").arg(table);
 
     query.prepare(QString("DELETE FROM %1 WHERE %2 = :id").arg(table, idColumn));
     query.bindValue(":id", id);
@@ -631,6 +657,33 @@ bool DataBaseManager::updateUser(int id, const QString& nombre, const QString& a
     bool result = updateRecord("Usuario",
                                "Nombre = :nombre, Apellido = :apellido, "
                                "Email = :email, Contraseña = :contrasena, Tipo_rol = :tipoRol",
+                               "ID_Usuario = :id", bindings);
+
+    if (!result && errorMsg) *errorMsg = "Error actualizando usuario";
+    return result;
+}
+
+bool DataBaseManager::updateUserKeepingPassword(int id, const QString& nombre, const QString& apellido,
+                                                const QString& email, const QString& tipoRol,
+                                                QString* errorMsg)
+{
+    // Misma validación que updateUser salvo la contraseña: aquí no se toca,
+    // así que no tiene sentido exigirle longitud mínima ni nada por el estilo.
+    if (!validateCommonUserFields(nombre, apellido, email, tipoRol, errorMsg))
+        return false;
+
+    QMap<QString, QVariant> bindings;
+    bindings[":nombre"]   = nombre;
+    bindings[":apellido"] = apellido;
+    bindings[":email"]    = email;
+    bindings[":tipoRol"]  = tipoRol;
+    bindings[":id"]       = id;
+
+    // A propósito, el SET no incluye "Contraseña = ...": así el hash ya
+    // almacenado se queda tal cual y el usuario conserva su contraseña.
+    bool result = updateRecord("Usuario",
+                               "Nombre = :nombre, Apellido = :apellido, "
+                               "Email = :email, Tipo_rol = :tipoRol",
                                "ID_Usuario = :id", bindings);
 
     if (!result && errorMsg) *errorMsg = "Error actualizando usuario";
