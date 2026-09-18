@@ -372,7 +372,7 @@ void Admin::loadCourses()
     auto cursos = mDb->getAcademicYears();
     for (const auto& c : cursos)
     {
-        QListWidgetItem* item = new QListWidgetItem(c.año, mCoursesListWidget);  // ← QString
+        QListWidgetItem* item = new QListWidgetItem(c.año, mCoursesListWidget);
         item->setData(Qt::UserRole, c.id);
     }
 }
@@ -644,11 +644,6 @@ void Admin::onEditUserClicked()
         }
 
         QString errorMsg;
-        // Si se deja la contraseña en blanco NO se debe pasar it->contrasena (que ya
-        // es un hash) a updateUser: éste vuelve a hashearla con PasswordManager::
-        // hashPassword y el usuario se queda sin poder iniciar sesión con su contraseña
-        // real. updateUserKeepingPassword actualiza el resto de campos sin tocar la
-        // columna Contraseña.
         bool ok = pass.isEmpty()
                   ? mDb->updateUserKeepingPassword(id, nombre, apellido, email, rol, &errorMsg)
                   : mDb->updateUser(id, nombre, apellido, email, pass, rol, &errorMsg);
@@ -658,6 +653,7 @@ void Admin::onEditUserClicked()
             QMessageBox::information(&dialog, "Éxito", "Usuario actualizado correctamente");
             dialog.accept();
             loadUsers();
+            loadSubjects();
         }
         else
         {
@@ -688,6 +684,7 @@ void Admin::onRemoveUserClicked()
     {
         QMessageBox::information(this, "Éxito", "Usuario eliminado correctamente");
         loadUsers();
+        loadSubjects();
     }
     else
     {
@@ -1089,8 +1086,6 @@ void Admin::onAssignTeachersClicked()
 
     dialog.exec();
 
-    // Refresca la lista de asignaturas para reflejar los cambios de profesorado
-    // hechos dentro del diálogo (asignar/desasignar no tocan mSubjectsListWidget).
     loadSubjects();
 }
 
